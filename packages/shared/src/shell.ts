@@ -856,7 +856,12 @@ const GIT_READ_SUBCOMMANDS = new Map<string, (args: ReadonlyArray<string>) => bo
   ["show-ref", () => true],
   [
     "config",
-    (args) => !args.includes("--edit") && !args.includes("-e") && positionals(args)[0] !== "edit",
+    (args) =>
+      args[0] === "get" ||
+      args[0] === "list" ||
+      args.some(
+        (arg) => arg === "--get" || arg.startsWith("--get-") || arg === "--list" || arg === "-l",
+      ),
   ],
   [
     "symbolic-ref",
@@ -890,6 +895,7 @@ export function runsGitWithoutConsole(
   if (path.basename(binDirectory).toLowerCase() !== "bin") return false;
   const build = path.basename(path.dirname(binDirectory)).toLowerCase();
   if (!GIT_FOR_WINDOWS_BUILDS.some((candidate) => candidate === build)) return false;
+  if (args.includes("--help")) return false;
   let index = 0;
   for (let arg = args[0]; arg?.startsWith("-"); arg = args[index]) {
     index += GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg) ? 2 : 1;

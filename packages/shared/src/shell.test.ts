@@ -362,6 +362,9 @@ describe("runsGitWithoutConsole", () => {
     expect(runs(["--git-dir=X", "rev-parse", "HEAD"])).toBe(true);
     expect(runs(["-c", "k=v", "for-each-ref", "refs/heads"])).toBe(true);
     expect(runs(["-C", "dir", "config", "--get", "k"])).toBe(true);
+    expect(runs(["config", "--get-regexp", "^remote\\."])).toBe(true);
+    expect(runs(["config", "get", "user.name"])).toBe(true);
+    expect(runs(["config", "--list"])).toBe(true);
     expect(runs(["symbolic-ref", "--quiet", "--short", "HEAD"])).toBe(true);
     expect(runs(["remote", "-v"])).toBe(true);
     expect(runs(["remote", "get-url", "origin"])).toBe(true);
@@ -376,6 +379,11 @@ describe("runsGitWithoutConsole", () => {
     expect(runs(["remote", "add", "origin", "url"])).toBe(false);
     expect(runs(["config", "--edit"])).toBe(false);
     expect(runs(["config", "edit", "--global"])).toBe(false);
+    expect(runs(["config", "--edi"])).toBe(false);
+    expect(runs(["config", "--edi", "user.name"])).toBe(false);
+    expect(runs(["config", "branch.x.gh-merge-base", "main"])).toBe(false);
+    expect(runs(["rev-parse", "--help"])).toBe(false);
+    expect(runs(["--help", "rev-parse"])).toBe(false);
     expect(runs(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"])).toBe(false);
     expect(runs(["-C", "rev-parse", "status"])).toBe(false);
   });
