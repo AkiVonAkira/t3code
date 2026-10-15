@@ -692,6 +692,10 @@ const GIT_GLOBAL_OPTIONS_WITH_VALUE = new Set([
 
 const positionals = (args: ReadonlyArray<string>) => args.filter((arg) => !arg.startsWith("-"));
 
+// Git accepts abbreviated and bundled options (`--del`, `-qd`), so a read is
+// recognized by allowing its options rather than by rejecting the write ones.
+const SYMBOLIC_REF_READ_OPTIONS = new Set(["-q", "--quiet", "--short"]);
+
 const GIT_READ_SUBCOMMANDS = new Map<string, (args: ReadonlyArray<string>) => boolean>([
   ["rev-parse", () => true],
   ["rev-list", () => true],
@@ -709,7 +713,9 @@ const GIT_READ_SUBCOMMANDS = new Map<string, (args: ReadonlyArray<string>) => bo
   ],
   [
     "symbolic-ref",
-    (args) => !args.includes("--delete") && !args.includes("-d") && positionals(args).length <= 1,
+    (args) =>
+      args.every((arg) => !arg.startsWith("-") || SYMBOLIC_REF_READ_OPTIONS.has(arg)) &&
+      positionals(args).length <= 1,
   ],
   [
     "remote",

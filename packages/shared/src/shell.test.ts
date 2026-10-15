@@ -609,6 +609,7 @@ describe("runsGitWithoutConsole", () => {
     expect(runs(["config", "get", "user.name"])).toBe(true);
     expect(runs(["config", "--list"])).toBe(true);
     expect(runs(["symbolic-ref", "--quiet", "--short", "HEAD"])).toBe(true);
+    expect(runs(["symbolic-ref", "refs/remotes/origin/HEAD"])).toBe(true);
     expect(runs(["remote", "-v"])).toBe(true);
     expect(runs(["remote", "get-url", "origin"])).toBe(true);
   });
@@ -628,6 +629,8 @@ describe("runsGitWithoutConsole", () => {
     expect(runs(["rev-parse", "--help"])).toBe(false);
     expect(runs(["--help", "rev-parse"])).toBe(false);
     expect(runs(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"])).toBe(false);
+    expect(runs(["symbolic-ref", "--del", "refs/remotes/origin/HEAD"])).toBe(false);
+    expect(runs(["symbolic-ref", "-qd", "refs/remotes/origin/HEAD"])).toBe(false);
     expect(runs(["-C", "rev-parse", "status"])).toBe(false);
   });
 
