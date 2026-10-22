@@ -6,7 +6,24 @@ export function resolveProtocolRelativeMediaUrl(src: string): string {
   return `${protocol}${src}`;
 }
 
+/** Decodes inline media locally; desktop connect-src omits `data:`, so fetch() cannot read it. */
+function readDataUrlBlob(src: string): Blob {
+  const comma = src.indexOf(",");
+  const [mimeType = "", ...parameters] = src.slice("data:".length, comma).split(";");
+  const payload = src.slice(comma + 1);
+  try {
+    if (comma < 0) throw new Error("Missing data URL payload.");
+    const bytes = parameters.includes("base64")
+      ? Uint8Array.from(atob(payload), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(payload));
+    return new Blob([bytes], { type: mimeType || "text/plain" });
+  } catch (cause) {
+    throw new Error("This inline media could not be decoded.", { cause });
+  }
+}
+
 async function readMediaBlob(src: string): Promise<Blob> {
+  if (src.startsWith("data:")) return readDataUrlBlob(src);
   let response: Response;
   try {
     response = await fetch(src);
