@@ -18,6 +18,15 @@ it("copies a data URL image without fetching it", async () => {
   expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
 });
 
+it("decodes percent-escaped bytes in a non-base64 data URL", async () => {
+  const escaped = PNG_BYTES.map((byte) => `%${byte.toString(16).padStart(2, "0")}`).join("");
+  const src = `data:image/png,${escaped}`;
+
+  const png = await readMediaPng(src);
+
+  expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
+});
+
 it("reports a malformed data URL instead of a fetch failure", async () => {
   await expect(readMediaPng("data:image/png;base64,%%%")).rejects.toThrow(
     "This inline media could not be decoded.",
