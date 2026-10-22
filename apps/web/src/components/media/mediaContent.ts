@@ -6,6 +6,20 @@ export function resolveProtocolRelativeMediaUrl(src: string): string {
   return `${protocol}${src}`;
 }
 
+// Data URL escapes are raw bytes, not UTF-8, so `%89` must stay one byte.
+function decodePercentBytes(payload: string): Uint8Array {
+  const encoder = new TextEncoder();
+  return Uint8Array.from(
+    payload
+      .split(/(%[0-9a-f]{2})/i)
+      .flatMap((part) =>
+        /^%[0-9a-f]{2}$/i.test(part)
+          ? [Number.parseInt(part.slice(1), 16)]
+          : [...encoder.encode(part)],
+      ),
+  );
+}
+
 /** Decodes inline media locally; desktop connect-src omits `data:`, so fetch() cannot read it. */
 function readDataUrlBlob(src: string): Blob {
   const comma = src.indexOf(",");
@@ -15,7 +29,7 @@ function readDataUrlBlob(src: string): Blob {
     if (comma < 0) throw new Error("Missing data URL payload.");
     const bytes = parameters.includes("base64")
       ? Uint8Array.from(atob(payload), (char) => char.charCodeAt(0))
-      : new TextEncoder().encode(decodeURIComponent(payload));
+      : decodePercentBytes(payload);
     return new Blob([bytes], { type: mimeType || "text/plain" });
   } catch (cause) {
     throw new Error("This inline media could not be decoded.", { cause });
