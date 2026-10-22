@@ -27,8 +27,10 @@ function readDataUrlBlob(src: string): Blob {
   const payload = src.slice(comma + 1);
   try {
     if (comma < 0) throw new Error("Missing data URL payload.");
-    const bytes = parameters.includes("base64")
-      ? Uint8Array.from(atob(payload), (char) => char.charCodeAt(0))
+    const isBase64 = parameters.some((parameter) => parameter.trim().toLowerCase() === "base64");
+    // Base64 text is ASCII, so any escape that is not valid UTF-8 is malformed anyway.
+    const bytes = isBase64
+      ? Uint8Array.from(atob(decodeURIComponent(payload)), (char) => char.charCodeAt(0))
       : decodePercentBytes(payload);
     return new Blob([bytes], { type: mimeType || "text/plain" });
   } catch (cause) {
@@ -37,7 +39,7 @@ function readDataUrlBlob(src: string): Blob {
 }
 
 async function readMediaBlob(src: string): Promise<Blob> {
-  if (src.startsWith("data:")) return readDataUrlBlob(src);
+  if (/^data:/i.test(src)) return readDataUrlBlob(src);
   let response: Response;
   try {
     response = await fetch(src);

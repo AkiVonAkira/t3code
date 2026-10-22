@@ -27,6 +27,14 @@ it("decodes percent-escaped bytes in a non-base64 data URL", async () => {
   expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
 });
 
+it("accepts any case in the scheme and base64 marker, and escapes in base64", async () => {
+  const base64 = btoa(String.fromCharCode(...PNG_BYTES)).replaceAll("=", "%3D");
+
+  const png = await readMediaPng(`DATA:image/png;BASE64,${base64}`);
+
+  expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
+});
+
 it("reports a malformed data URL instead of a fetch failure", async () => {
   await expect(readMediaPng("data:image/png;base64,%%%")).rejects.toThrow(
     "This inline media could not be decoded.",
