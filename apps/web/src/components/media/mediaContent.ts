@@ -22,9 +22,11 @@ function decodePercentBytes(payload: string) {
 
 /** Decodes inline media locally; desktop connect-src omits `data:`, so fetch() cannot read it. */
 function readDataUrlBlob(src: string): Blob {
-  const comma = src.indexOf(",");
-  const [mimeType = "", ...parameters] = src.slice("data:".length, comma).split(";");
-  const payload = src.slice(comma + 1);
+  // A fragment is never part of the payload; a literal `#` in data must be escaped as `%23`.
+  const url = src.split("#", 1)[0] ?? src;
+  const comma = url.indexOf(",");
+  const [mimeType = "", ...parameters] = url.slice("data:".length, comma).split(";");
+  const payload = url.slice(comma + 1);
   try {
     if (comma < 0) throw new Error("Missing data URL payload.");
     const isBase64 = parameters.some((parameter) => parameter.trim().toLowerCase() === "base64");

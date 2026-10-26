@@ -33,6 +33,14 @@ it("accepts any case in the scheme and base64 marker, and escapes in base64", as
   expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
 });
 
+it("ignores the URL fragment when decoding a data URL", async () => {
+  const src = `data:image/png;base64,${btoa(String.fromCharCode(...PNG_BYTES))}#preview`;
+
+  const png = await readMediaPng(src);
+
+  expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
+});
+
 it.each(["data:image/png;base64,%%%", "data:image/png"])(
   "reports malformed inline media: %s",
   async (src) => {
