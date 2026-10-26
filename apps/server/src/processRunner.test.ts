@@ -137,11 +137,11 @@ describe("runProcess", () => {
     );
 
     return Effect.gen(function* () {
-      yield* runWith(spawner)({ command: "git", args: ["rev-parse", "HEAD"] });
+      yield* runWith(spawner)({ command: "git", args: ["rev-parse", "--show-toplevel"] });
       yield* runWith(spawner)({ command: "git", args: ["status", "--porcelain"] });
 
       expect(spawned).toStrictEqual([
-        { args: ["rev-parse", "HEAD"], detached: true, windowsHide: true },
+        { args: ["rev-parse", "--show-toplevel"], detached: true, windowsHide: true },
         { args: ["status", "--porcelain"], detached: undefined, windowsHide: undefined },
       ]);
     }).pipe(

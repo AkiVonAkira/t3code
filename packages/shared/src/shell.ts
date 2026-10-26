@@ -832,19 +832,33 @@ const positionals = (args: ReadonlyArray<string>) => args.filter((arg) => !arg.s
 const SYMBOLIC_REF_READ_OPTIONS = new Set(["-q", "--quiet", "--short"]);
 
 const GIT_READ_SUBCOMMANDS = new Map<string, (args: ReadonlyArray<string>) => boolean>([
-  ["rev-parse", () => true],
-  ["rev-list", () => true],
-  ["merge-base", () => true],
-  ["for-each-ref", () => true],
-  ["show-ref", () => true],
+  [
+    "rev-parse",
+    (args) =>
+      (args.length === 1 &&
+        [
+          "--git-dir",
+          "--git-common-dir",
+          "--show-toplevel",
+          "--show-prefix",
+          "--is-inside-work-tree",
+          "--is-bare-repository",
+        ].includes(args[0]!)) ||
+      (args.length === 2 && args[0] === "--git-path"),
+  ],
   [
     "config",
     (args) =>
-      args[0] === "get" ||
-      args[0] === "list" ||
-      args.some(
-        (arg) => arg === "--get" || arg.startsWith("--get-") || arg === "--list" || arg === "-l",
-      ),
+      [
+        "--get",
+        "--get-all",
+        "--get-regexp",
+        "--get-urlmatch",
+        "--list",
+        "-l",
+        "get",
+        "list",
+      ].includes(args[0] ?? "") && args.slice(1).every((arg) => !arg.startsWith("-")),
   ],
   [
     "symbolic-ref",
@@ -861,13 +875,7 @@ const GIT_READ_SUBCOMMANDS = new Map<string, (args: ReadonlyArray<string>) => bo
   ],
 ]);
 
-/**
- * Whether to spawn git detached, without a console. Hidden-window spawns give
- * every git command its own console host process; Git for Windows' real
- * git.exe runs fine without one. Commands that can start hooks or other MSYS
- * programs, and launchers or shims that would allocate a console for the real
- * git, keep the default.
- */
+// Only detach Git for Windows reads that cannot start helpers.
 export function runsGitWithoutConsole(
   platform: NodeJS.Platform,
   executable: string,
@@ -883,7 +891,13 @@ export function runsGitWithoutConsole(
   if (args.includes("--help")) return false;
   let index = 0;
   for (let arg = args[0]; arg?.startsWith("-"); arg = args[index]) {
-    index += GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg) ? 2 : 1;
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
+      index += 2;
+    } else if (arg === "--no-pager" || GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg.split("=")[0]!)) {
+      index += 1;
+    } else {
+      return false;
+    }
   }
   const subcommand = args[index];
   const isRead = subcommand === undefined ? undefined : GIT_READ_SUBCOMMANDS.get(subcommand);

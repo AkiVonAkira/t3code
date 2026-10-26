@@ -527,11 +527,13 @@ describe("runsGitWithoutConsole", () => {
     runsGitWithoutConsole(platform, executable, args);
 
   it("runs read-only commands of the real git.exe without a console", () => {
-    expect(runs(["rev-parse", "HEAD"])).toBe(true);
-    expect(runs(["rev-parse", "HEAD"], "D:\\PortableGit\\MINGW64\\bin\\git.EXE")).toBe(true);
-    expect(runs(["--git-dir", "X", "rev-parse", "HEAD"])).toBe(true);
-    expect(runs(["--git-dir=X", "rev-parse", "HEAD"])).toBe(true);
-    expect(runs(["-c", "k=v", "for-each-ref", "refs/heads"])).toBe(true);
+    expect(runs(["rev-parse", "--show-toplevel"])).toBe(true);
+    expect(runs(["rev-parse", "--show-toplevel"], "D:\\PortableGit\\MINGW64\\bin\\git.EXE")).toBe(
+      true,
+    );
+    expect(runs(["--git-dir", "X", "rev-parse", "--git-common-dir"])).toBe(true);
+    expect(runs(["--git-dir=X", "rev-parse", "--git-common-dir"])).toBe(true);
+    expect(runs(["-c", "k=v", "rev-parse", "--git-path", "index"])).toBe(true);
     expect(runs(["-C", "dir", "config", "--get", "k"])).toBe(true);
     expect(runs(["config", "--get-regexp", "^remote\\."])).toBe(true);
     expect(runs(["config", "get", "user.name"])).toBe(true);
@@ -543,6 +545,15 @@ describe("runsGitWithoutConsole", () => {
   });
 
   it("keeps the console for commands that can start hooks or edit", () => {
+    expect(runs(["rev-parse", "HEAD:path"])).toBe(false);
+    expect(runs(["rev-parse", "HEAD"])).toBe(false);
+    expect(runs(["merge-base", "HEAD", "main"])).toBe(false);
+    expect(runs(["for-each-ref", "--format=%(contents)"])).toBe(false);
+    expect(runs(["show-ref", "--verify", "--quiet", "refs/heads/main"])).toBe(false);
+    expect(runs(["config", "section.key", "--list"])).toBe(false);
+    expect(runs(["config", "--blob", "HEAD:path", "--get", "key"])).toBe(false);
+    expect(runs(["rev-list", "--objects", "--all"])).toBe(false);
+    expect(runs(["rev-list", "--count", "HEAD"])).toBe(false);
     expect(runs(["commit", "-m", "x"])).toBe(false);
     expect(runs(["fetch", "origin"])).toBe(false);
     expect(runs(["status", "--porcelain"])).toBe(false);
@@ -563,11 +574,15 @@ describe("runsGitWithoutConsole", () => {
   });
 
   it("keeps the console for launchers, shims and other platforms", () => {
-    expect(runs(["rev-parse", "HEAD"], "C:\\Program Files\\Git\\cmd\\git.exe")).toBe(false);
-    expect(runs(["rev-parse", "HEAD"], "D:\\PortableGit\\bin\\git.exe")).toBe(false);
-    expect(runs(["rev-parse", "HEAD"], "C:\\Users\\x\\scoop\\shims\\git.exe")).toBe(false);
-    expect(runs(["rev-parse", "HEAD"], "/usr/bin/git", "linux")).toBe(false);
-    expect(runs(["rev-parse", "HEAD"], git, "linux")).toBe(false);
+    expect(runs(["rev-parse", "--show-toplevel"], "C:\\Program Files\\Git\\cmd\\git.exe")).toBe(
+      false,
+    );
+    expect(runs(["rev-parse", "--show-toplevel"], "D:\\PortableGit\\bin\\git.exe")).toBe(false);
+    expect(runs(["rev-parse", "--show-toplevel"], "C:\\Users\\x\\scoop\\shims\\git.exe")).toBe(
+      false,
+    );
+    expect(runs(["rev-parse", "--show-toplevel"], "/usr/bin/git", "linux")).toBe(false);
+    expect(runs(["rev-parse", "--show-toplevel"], git, "linux")).toBe(false);
     expect(runs(["rev-parse"], "C:\\Program Files\\Git\\ucrt64\\bin\\node.exe")).toBe(false);
   });
 });
