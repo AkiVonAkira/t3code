@@ -7,7 +7,7 @@ export function resolveProtocolRelativeMediaUrl(src: string): string {
 }
 
 // Data URL escapes are raw bytes, not UTF-8, so `%89` must stay one byte.
-function decodePercentBytes(payload: string): Uint8Array {
+function decodePercentBytes(payload: string) {
   const encoder = new TextEncoder();
   return Uint8Array.from(
     payload

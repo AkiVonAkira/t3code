@@ -6,9 +6,7 @@ const PNG_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 it("copies a data URL image without fetching it", async () => {
   // The desktop renderer's connect-src rejects data: URLs the way fetch rejects a CORS failure.
-  using fetch = vi
-    .spyOn(globalThis, "fetch")
-    .mockRejectedValue(new TypeError("Failed to fetch"));
+  using fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
   const src = `data:image/png;base64,${btoa(String.fromCharCode(...PNG_BYTES))}`;
 
   const png = await readMediaPng(src);
@@ -35,8 +33,17 @@ it("accepts any case in the scheme and base64 marker, and escapes in base64", as
   expect([...new Uint8Array(await png.arrayBuffer())]).toEqual(PNG_BYTES);
 });
 
-it("reports a malformed data URL instead of a fetch failure", async () => {
-  await expect(readMediaPng("data:image/png;base64,%%%")).rejects.toThrow(
-    "This inline media could not be decoded.",
-  );
+it.each(["data:image/png;base64,%%%", "data:image/png"])(
+  "reports malformed inline media: %s",
+  async (src) => {
+    await expect(readMediaPng(src)).rejects.toThrow("This inline media could not be decoded.");
+  },
+);
+
+it("keeps remote media on the fetch path", async () => {
+  const png = new Blob([new Uint8Array(PNG_BYTES)], { type: "image/png" });
+  using fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(png));
+
+  expect(await readMediaPng("https://example.com/image.png")).toEqual(png);
+  expect(fetch).toHaveBeenCalledWith("https://example.com/image.png");
 });
