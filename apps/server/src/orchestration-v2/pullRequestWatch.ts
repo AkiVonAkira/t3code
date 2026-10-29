@@ -27,9 +27,12 @@ export interface PullRequestWatchReport {
   readonly exhausted: boolean;
 }
 
-// action-required is a finished check needing human input.
 const isFailedCheck = (check: PullRequestCheck) =>
-  check.status === "failure" || check.status === "cancelled" || check.status === "action-required";
+  check.status === "failure" || check.status === "cancelled";
+// action-required is a run held for maintainer approval. It has started no jobs, so it has not
+// failed, and only someone with write access can move it on.
+const isUnfinishedCheck = (check: PullRequestCheck) =>
+  check.status === "pending" || check.status === "action-required";
 
 export function evaluatePullRequestWatch(
   watch: ThreadPullRequestWatch,
@@ -57,7 +60,7 @@ export function evaluatePullRequestWatch(
 
     const required = detail.checks.filter((check) => check.required === true);
     const gate = required.length > 0 ? required : detail.checks;
-    const passedNow = gate.every((check) => check.status !== "pending" && !isFailedCheck(check));
+    const passedNow = gate.every((check) => !isUnfinishedCheck(check) && !isFailedCheck(check));
     const gateNames = gate.map((check) => check.name);
     const told = passed && passedChecks.length === 0 ? gateNames : passedChecks;
     // Required checks can finish between sweeps; detect new names. With no required checks, ignore advisory gate growth.
@@ -71,14 +74,14 @@ export function evaluatePullRequestWatch(
             .map((check) => check.name)
         : [];
     const settled =
-      failed.length === 0 && detail.checks.every((check) => check.status !== "pending");
+      failed.length === 0 && detail.checks.every((check) => !isUnfinishedCheck(check));
     owedChecks = owed;
     if (passedNow && (!passed || gateGrew)) {
       changes.push({ kind: "checks-passed", count: gate.length, required: required.length > 0 });
       owedChecks =
         required.length > 0
           ? detail.checks
-              .filter((check) => check.required !== true && check.status === "pending")
+              .filter((check) => check.required !== true && isUnfinishedCheck(check))
               .map((check) => check.name)
           : [];
     } else if (settled && owed.length > 0) {
@@ -108,7 +111,9 @@ export function evaluatePullRequestWatch(
 
   const own = (detail.viewer ?? detail.author?.login)?.toLowerCase();
   const through = Date.parse(watch.remarksThrough);
-  const activeAt = (remark: PullRequestComment) => remark.editedAt ?? remark.createdAt;
+  // Bots rewrite their summary comment on every push, so only a person's edit counts as news.
+  const activeAt = (remark: PullRequestComment) =>
+    remark.author?.isBot === true ? remark.createdAt : (remark.editedAt ?? remark.createdAt);
   // Hosts can stamp remarks to the second, so remarks at the boundary time are told apart by ID.
   const fresh = (remarks ?? []).filter((remark) => {
     const at = Date.parse(activeAt(remark));

@@ -96,6 +96,19 @@ describe("evaluatePullRequestWatch", () => {
     assert.equal(evaluatePullRequestWatch(test.next, pushed, noRemarks).changes.length, 1);
   });
 
+  it("treats a run waiting for maintainer approval as unfinished, not failed", () => {
+    const waiting = check("CI", "action-required");
+    const held = detail({ checks: [check("lint", "success"), waiting] });
+    assert.deepEqual(evaluatePullRequestWatch(watch(), held, noRemarks).changes, []);
+
+    const approved = evaluatePullRequestWatch(
+      evaluatePullRequestWatch(watch(), held, noRemarks).next,
+      detail({ checks: [check("lint", "success"), check("CI", "success")] }),
+      noRemarks,
+    );
+    assert.deepEqual(approved.changes, [{ kind: "checks-passed", count: 2, required: false }]);
+  });
+
   it("reports passed once the required checks pass, whatever the others do", () => {
     const required = (name: string, status: PullRequestCheck["status"]) => ({
       ...check(name, status),
@@ -263,7 +276,7 @@ describe("evaluatePullRequestWatch", () => {
   });
 
   it("reports edits after the watermark once and counts them toward the wake limit", () => {
-    const old = remark("greptile[bot]", "2026-10-02T11:00:00Z");
+    const old = remark("reviewer", "2026-10-02T11:00:00Z");
     const watching = watch({
       headSha: "aaaaaaaaaa",
       remarkIds: [old.id],
@@ -284,7 +297,7 @@ describe("evaluatePullRequestWatch", () => {
   });
 
   it("wakes once per edit of a remark seen at the watermark, never for the agent's own", () => {
-    const seen = remark("ci-bot", "2026-10-10T19:52:40.000Z");
+    const seen = remark("maintainer", "2026-10-10T19:52:40.000Z");
     const watching = watch({
       headSha: "aaaaaaaaaa",
       remarksThrough: seen.createdAt,
@@ -303,6 +316,15 @@ describe("evaluatePullRequestWatch", () => {
     assert.deepEqual(evaluatePullRequestWatch(second.next, detail(), [again]).changes, []);
     const own = { ...edited, author: { login: "agent-user", name: null, avatarUrl: null } };
     assert.deepEqual(evaluatePullRequestWatch(watching, detail(), [own]).changes, []);
+  });
+
+  it("wakes for a bot's new remark but not when it edits one", () => {
+    const bot = { login: "coderabbitai", name: null, avatarUrl: null, isBot: true };
+    const summary = { ...remark("coderabbitai", "2026-10-02T12:01:00Z"), author: bot };
+    const told = evaluatePullRequestWatch(watch(), detail(), [summary]);
+    assert.deepEqual(told.changes, [{ kind: "remarks", remarks: [summary] }]);
+    const refreshed = { ...summary, editedAt: "2026-10-02T12:30:00Z" };
+    assert.deepEqual(evaluatePullRequestWatch(told.next, detail(), [refreshed]).changes, []);
   });
 
   it("does not treat a failed check read as a rerun", () => {
