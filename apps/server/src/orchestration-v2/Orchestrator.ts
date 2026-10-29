@@ -5508,7 +5508,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       projection.thread.worktreePath === null
         ? latestRun
         : undefined;
-    const queueBehindRun = activeRun ?? worktreeMissingRun;
+    // A user's message to a provider still out of usage would fail on arrival. With a known reset
+    // it queues behind the limited run, and the thread resumes at the reset so the queue follows.
+    const limitedRun =
+      activeRun === undefined &&
+      worktreeMissingRun === undefined &&
+      command.createdBy === "user" &&
+      command.manualContinuationOfRunId === undefined &&
+      command.usageLimitContinuationOfRunId === undefined &&
+      command.restartContinuationOfRunId === undefined &&
+      command.idleCompaction === undefined &&
+      usageLimitHoldsQueue(projection, modelSelection.instanceId)
+        ? usageLimitBlockedRun(projection.runs, projection.turnItems, null)
+        : null;
+    const limitResetAt = latestRootProviderFailure(limitedRun, projection.turnItems)?.resetAt;
+    const queuesBehindLimit =
+      limitedRun !== null &&
+      limitResetAt != null &&
+      Date.parse(limitResetAt) > DateTime.toEpochMillis(yield* DateTime.now);
+    const queueBehindRun =
+      activeRun ?? worktreeMissingRun ?? (queuesBehindLimit ? limitedRun : undefined);
     const pendingMergeBackTransfers = pendingMergeBackTransfersForThread(projection);
     const startsOrQueuesRun =
       dispatchMode.type === "defer_start" ||
@@ -5744,6 +5763,31 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.notification === undefined ? {} : { notification: command.notification }),
       };
       const emitEvent = emit(events, command);
+      const recovery = projection.thread.limitRecovery;
+      if (
+        queuesBehindLimit &&
+        !(
+          recovery?.autoResume &&
+          recovery.runId === limitedRun.id &&
+          recovery.resetAt === limitResetAt
+        )
+      ) {
+        yield* emitEvent({
+          type: "thread.metadata-updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: {
+            ...projection.thread,
+            limitRecovery: {
+              runId: limitedRun.id,
+              resetAt: limitResetAt,
+              autoResume: true,
+              snooze: recovery?.runId === limitedRun.id && recovery.snooze === true,
+              requestId: command.commandId,
+            },
+          },
+        });
+      }
       if (targetProviderThread === undefined) {
         yield* emitEvent({
           type: "provider-thread.updated",
