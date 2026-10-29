@@ -55,6 +55,7 @@ it.effect("expires orphaned runtime requests before command readiness", () => {
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
         }),
@@ -107,6 +108,7 @@ it.effect("preserves async questions across startup and shutdown", () => {
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
         }),
@@ -177,6 +179,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -322,6 +325,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -388,6 +392,7 @@ it.effect("cancels a stale waiting run when no checkpoint capture can finish it"
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
         }),
@@ -415,6 +420,76 @@ it.effect("cancels a stale waiting run when no checkpoint capture can finish it"
     assert.equal(summary.terminalizedRuns, 1);
     const runEvent = committedInput?.events.find((event) => event.type === "run.updated");
     assert.equal(runEvent?.type === "run.updated" ? runEvent.payload.status : null, "cancelled");
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect("tells the thread why a run it cancels on restart stopped", () => {
+  const threadId = ThreadId.make("thread_restart_notice");
+  const runId = RunId.make("run_restart_notice");
+  let committedInput: Parameters<EventSink.EventSinkV2["Service"]["commitCommand"]>[0] | null =
+    null;
+  const projection = {
+    thread: { id: threadId },
+    runtimeRequests: [],
+    providerSessions: [],
+    providerThreads: [],
+    providerTurns: [],
+    runs: [
+      {
+        id: runId,
+        status: "running",
+        rootNodeId: NodeId.make("node_restart_notice"),
+        providerThreadId: ProviderThreadId.make("provider_thread_restart_notice"),
+        providerInstanceId: ProviderInstanceId.make("codex"),
+      },
+    ],
+    attempts: [],
+    nodes: [],
+    subagents: [],
+    messages: [],
+    turnItems: [],
+  } as unknown as OrchestrationV2ThreadProjection;
+  const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(ServerSettings.layerTest()),
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getRecoveryThreadIds: () => Effect.succeed([threadId]),
+          getRuntimeRecoveryProjection: () => Effect.succeed(projection),
+          getNextTurnItemOrdinal: () => Effect.succeed(41),
+        }),
+        Layer.mock(EventSink.EventSinkV2)({
+          commitCommand: (input) => {
+            committedInput = input;
+            return Effect.succeed({ committed: true, cancelledEffectCount: 0 } as never);
+          },
+        }),
+        IdAllocator.layer,
+        Layer.mock(EffectWorker.OrchestrationEffectWorkerV2)({
+          runRecoveryOnce: Effect.succeed(false),
+        }),
+        Layer.mock(EffectOutbox.EffectOutboxV2)({
+          listByCommandId: () => Effect.succeed([]),
+          reconcileAfterProcessLoss: Effect.succeed({ requeued: 0, cancelled: 0 }),
+        }),
+      ),
+    ),
+  );
+
+  return Effect.gen(function* () {
+    yield* (yield* ProviderRuntimeRecovery.ProviderRuntimeRecoveryService).reconcile("startup");
+    const notice = committedInput?.events.flatMap((event) =>
+      event.type === "turn-item.updated" && event.payload.type === "system_notice"
+        ? [event.payload]
+        : [],
+    );
+    assert.equal(notice?.length, 1);
+    assert.equal(notice?.[0]?.runId, runId);
+    assert.equal(notice?.[0]?.ordinal, 41);
+    assert.equal(
+      notice?.[0]?.message,
+      "Cancelled because the server restarted before the provider work completed.",
+    );
   }).pipe(Effect.provide(layer));
 });
 
@@ -464,6 +539,7 @@ it.effect("recovery closes a secret card's form but leaves a link card open", ()
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
         }),
@@ -555,6 +631,7 @@ it.effect.each(["queued", "preparing"] as const)("recovers $0 work after restart
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           getThreadRecords: () => Effect.succeed(projection),
@@ -681,6 +758,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -722,6 +800,7 @@ it.effect(
         ]),
         [
           ["run.updated", "cancelled"],
+          ["turn-item.updated", "completed"],
           ["run-attempt.updated", "cancelled"],
           ["node.updated", "cancelled"],
           ["provider-turn.updated", "cancelled"],
@@ -788,6 +867,7 @@ it.effect("cancels workflow members and child roots without run ids after restar
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([parentThreadId, childThreadId]),
           getRuntimeRecoveryProjection: (threadId) =>
             Effect.succeed(threadId === parentThreadId ? parentProjection : childProjection),
@@ -953,6 +1033,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -1110,6 +1191,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -1240,6 +1322,7 @@ it.effect(
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getNextTurnItemOrdinal: () => Effect.succeed(0),
             getRecoveryThreadIds: () => Effect.succeed([threadId]),
             getRuntimeRecoveryProjection: () => Effect.succeed(projection),
           }),
@@ -1397,6 +1480,7 @@ it.effect("leaves delegated tasks to their own child threads after process loss"
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getNextTurnItemOrdinal: () => Effect.succeed(0),
           getRecoveryThreadIds: () => Effect.succeed([threadId]),
           getRuntimeRecoveryProjection: () => Effect.succeed(projection),
         }),

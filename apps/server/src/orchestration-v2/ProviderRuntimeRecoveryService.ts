@@ -384,6 +384,19 @@ export const make = Effect.gen(function* () {
           },
         });
       }
+      let noticeOrdinal =
+        runs.length === 0
+          ? 0
+          : yield* projections.getNextTurnItemOrdinal(projection.thread.id).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProviderRuntimeRecoveryError({
+                    operation: "reconcile",
+                    threadId: projection.thread.id,
+                    cause,
+                  }),
+              ),
+            );
       for (const run of runs) {
         events.push({
           id: yield* allocateEventId(),
@@ -393,6 +406,34 @@ export const make = Effect.gen(function* () {
           providerInstanceId: run.providerInstanceId,
           occurredAt: now,
           payload: { ...run, status: "cancelled", queuePosition: null, completedAt: now },
+        });
+        // Without this, a run cut by a restart reads as cancelled with no one having cancelled it.
+        events.push({
+          id: yield* allocateEventId(),
+          type: "turn-item.updated",
+          threadId: projection.thread.id,
+          runId: run.id,
+          ...(run.rootNodeId === null ? {} : { nodeId: run.rootNodeId }),
+          providerInstanceId: run.providerInstanceId,
+          occurredAt: now,
+          payload: {
+            id: ids.derive.runSignalTurnItem({ runId: run.id, signal: `recovery-${trigger}` }),
+            threadId: projection.thread.id,
+            runId: run.id,
+            nodeId: run.rootNodeId,
+            providerThreadId: run.providerThreadId,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: noticeOrdinal++,
+            status: "completed",
+            title: trigger === "startup" ? "Server restarted" : "Server shut down",
+            startedAt: now,
+            completedAt: now,
+            updatedAt: now,
+            type: "system_notice",
+            message: detail,
+          },
         });
         for (const attempt of projection.attempts.filter(
           (candidate) =>
