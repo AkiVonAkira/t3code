@@ -129,3 +129,32 @@ it.effect.each([
     Effect.provide(SqlitePersistence.layerMemory),
   ),
 );
+
+it.effect("runs a fixed-time task once when the server comes back after missing it", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("TZ", "Europe/Stockholm");
+    yield* TestClock.setTime(Date.parse("2026-10-13T13:46:39.000Z"));
+    const created = yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      return yield* service.upsert(
+        yield* decodeInput({
+          ...input,
+          schedule: { type: "fixed_time", timeOfDay: "20:57", weekdays: [2] },
+        }),
+      );
+    }).pipe(Effect.provide(serviceLayer), Effect.provideService(ServerActivation, Effect.never));
+    expect(created.task.nextRunAt).toBe("2026-10-13T18:57:00.000Z");
+
+    // The server was off from 19:00 until 05:26 the next morning.
+    yield* TestClock.setTime(Date.parse("2026-10-14T03:26:20.000Z"));
+    const after = yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      yield* TestClock.adjust("1 second");
+      return (yield* service.list()).tasks[0];
+    }).pipe(Effect.provide(serviceLayer));
+    // The launch mock fails, which still records the run.
+    expect(after?.runCount).toBe(1);
+    expect(after?.lastRunStatus).toBe("failed");
+    expect(after?.nextRunAt).toBe("2026-10-20T18:57:00.000Z");
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
