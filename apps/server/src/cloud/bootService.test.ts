@@ -815,8 +815,8 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
         activeVersion: "1.2.3",
       });
       expect(commands.filter((command) => command.startsWith("schtasks "))).toEqual([
-        `schtasks /Create /XML ${plan.unitPath} /TN t3code-theo /F`,
-        "schtasks /Run /TN t3code-theo",
+        `schtasks /Create /XML ${plan.unitPath} /TN t3code-PC-theo /F`,
+        "schtasks /Run /TN t3code-PC-theo",
       ]);
       // No launcher answers the control pipe here.
       expect(yield* service.status).toMatchObject({
@@ -828,9 +828,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       commands.length = 0;
       expect(yield* service.uninstall).toBe(true);
       expect(commands).toEqual([
-        "schtasks /Change /TN t3code-theo /DISABLE",
-        "schtasks /End /TN t3code-theo",
-        "schtasks /Delete /TN t3code-theo /F",
+        "schtasks /Change /TN t3code-PC-theo /DISABLE",
+        "schtasks /End /TN t3code-PC-theo",
+        "schtasks /Delete /TN t3code-PC-theo /F",
       ]);
       expect((yield* service.status).installed).toBe(false);
     }),
@@ -842,9 +842,9 @@ it.layer(NodeServices.layer)("boot service install", (it) => {
       const plan = yield* service.install();
       const inside = yield* makeService(undefined, "1.2.4", undefined, true);
       const handoff = [
-        `schtasks /Create /XML ${plan.unitPath} /TN t3code-theo /F`,
-        "schtasks /End /TN t3code-theo",
-        "schtasks /Run /TN t3code-theo",
+        `schtasks /Create /XML ${plan.unitPath} /TN t3code-PC-theo /F`,
+        "schtasks /End /TN t3code-PC-theo",
+        "schtasks /Run /TN t3code-PC-theo",
       ];
       commands.length = 0;
 

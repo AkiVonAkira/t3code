@@ -439,7 +439,7 @@ async function terminateChild(
 }
 
 /** Task Scheduler names are machine-wide, so each Windows account runs its own task. */
-export const serviceTaskName = (userName: string) => `t3code-${userName}`;
+export const serviceTaskName = (domain: string, userName: string) => `t3code-${domain}-${userName}`;
 
 /** Keyed by T3 home, so only the launcher serving that home can answer. */
 export const serviceControlPipePath = (baseDir: string) =>
@@ -992,7 +992,7 @@ export async function main(options: LauncherOptions = {}): Promise<void> {
     // Agents the server left behind keep the console host, and so the task, running; ending it
     // lets the next repeating trigger start the service again.
     if (windows && options.serviceUnit !== undefined) {
-      const taskName = serviceTaskName(process.env.USERNAME ?? "");
+      const taskName = serviceTaskName(process.env.USERDOMAIN ?? "", process.env.USERNAME ?? "");
       NodeChildProcess.spawnSync("schtasks", ["/End", "/TN", taskName], {
         stdio: "ignore",
         windowsHide: true,
