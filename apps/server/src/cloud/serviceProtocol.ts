@@ -55,6 +55,10 @@ export type ServiceLauncherParentMessage =
   | {
       readonly type: "committed";
       readonly updateId: string;
+    }
+  | {
+      /** Shut down as on SIGTERM, which Windows cannot deliver. */
+      readonly type: "stop";
     };
 
 const SEMVER_NUMBER = "(?:0|[1-9]\\d*)";
@@ -252,6 +256,7 @@ export function decodeServiceLauncherParentMessage(
   if (value.type === "update-accepted" && typeof value.updateId === "string") {
     return { type: value.type, updateId: value.updateId };
   }
+  if (value.type === "stop") return { type: value.type };
   return value.type === "committed" && typeof value.updateId === "string"
     ? { type: value.type, updateId: value.updateId }
     : undefined;

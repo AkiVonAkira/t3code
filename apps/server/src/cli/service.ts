@@ -63,14 +63,14 @@ function formatServiceChange(
   result: Extract<ServiceReconcileResult, { readonly changed: true }>,
 ): string {
   if (result.plan.handedOff === true) {
-    return `Handed the T3 Code service switch to t3@${packageJson.version} to a separate systemd unit, since this session runs inside the service and disconnects when it restarts.\nResult: ${result.plan.logPath}`;
+    return `Handed the T3 Code service switch to t3@${packageJson.version} to the service manager, since this session runs inside the service and disconnects when it restarts.\nResult: ${result.plan.logPath}`;
   }
   return `${result.previouslyInstalled ? "Updated" : "Installed"} T3 Code service with t3@${packageJson.version}.\nLogs: ${result.plan.logPath}`;
 }
 
 function formatServiceStatus(status: BootService.BootServiceStatus, cliVersion: string): string {
   if (!status.supported) {
-    return "T3 Code service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd";
+    return "T3 Code service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd, macOS with launchd, Windows with Task Scheduler";
   }
   if (!status.installed) {
     return "T3 Code service\n  Status: not installed\n  Next: Run `t3 service install`.";
@@ -247,8 +247,8 @@ export const offerServiceDuringOnboarding = Effect.gen(function* () {
     Prompt.Confirm({
       message: installed
         ? "The installed T3 Code service needs an update or repair. Update it now?"
-        : platform === "darwin"
-          ? "Run T3 Code in the background whenever you log in to this Mac? " +
+        : platform === "darwin" || platform === "win32"
+          ? `Run T3 Code in the background whenever you log in to this ${platform === "darwin" ? "Mac" : "PC"}? ` +
             "It stays reachable through T3 Connect while you are logged in."
           : "Run T3 Code in the background whenever this machine boots? " +
             "It stays reachable through T3 Connect even after you log out.",

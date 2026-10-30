@@ -6,6 +6,7 @@ import * as Schema from "effect/Schema";
 import { Command, GlobalFlag } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
+import { awaitServiceLauncherStop } from "../cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "../config.ts";
 import { awaitLauncherLoss } from "../launcherWatch.ts";
 import { runServer } from "../server.ts";
@@ -30,7 +31,10 @@ const runServerCommand = Effect.fn("server.runServerCommand")(function* (
 ) {
   const logLevel = yield* GlobalFlag.LogLevel;
   const config = yield* resolveServerConfig(flags, logLevel, options);
-  const run = runServer.pipe(Effect.provideService(ServerConfig.ServerConfig, config));
+  const run = Effect.raceFirst(
+    runServer.pipe(Effect.provideService(ServerConfig.ServerConfig, config)),
+    awaitServiceLauncherStop().pipe(Effect.andThen(Effect.interrupt)),
+  );
   if (config.mode !== "desktop" || config.desktopBootstrapToken === undefined) return yield* run;
   yield* Effect.sync(() => {
     process.stdout.on("error", ignoreClosedLauncherPipe);
